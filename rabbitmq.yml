@@ -1,0 +1,17 @@
+---
+- hosts: slave1
+  tasks:
+    - name: rabbirmq instalation
+      apt: name=rabbitmq-server state=present
+
+    - name: user add
+      rabbitmq_user:
+        user: dinesh
+        password: dinesh
+        permissions:
+          - vhost: /
+            configure_priv: .*
+            read_priv: .*
+            write_priv: .*
+        state: present
+      tags: sekhar

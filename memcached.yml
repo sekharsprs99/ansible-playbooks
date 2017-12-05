@@ -1,0 +1,19 @@
+---
+- hosts: slave1
+  tasks:
+    - name: memcached instalation
+      apt: name={{item}} state=present
+      with_items:
+        - memcached
+        - python-memcache
+      when: ansible_os_family == 'Debian' 
+
+    - name: modify configuration file
+      template:
+        src: memcached.conf.j2
+        dest: /etc/memcached.conf
+      notify: service restart
+
+  handlers:
+    - name: service restart
+      service: name=memcached state=restarted
