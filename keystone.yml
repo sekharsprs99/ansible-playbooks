@@ -1,0 +1,110 @@
+---
+- hosts: controller
+  gather_facts: false
+  tasks:
+    
+    - name: connect to database
+      mysql_db:
+        login_host: localhost
+        login_user: root
+        login_password: root
+        name: keystone
+        state: present
+    - name: localhost keystone user
+      mysql_user:
+        login_host: localhost
+        login_user: root
+        login_password: root
+        name: keystone
+        password: keystone
+        priv: keystone.*:ALL 
+        host: "{{ item }}"
+        state: present
+      with_items:
+        - localhost
+        - '%'
+
+    - name: create token
+      shell: openssl rand -hex 10 > /root/token
+
+    - name: Disable the keystone service
+      shell: echo "manual" > /etc/init/keystone.override
+      tags: a
+
+    - name: Install packages
+      apt: name={{item}} state=present force=yes
+      with_items:
+        - keystone
+        - apache2
+        - libapache2-mod-wsgi
+      tags: b
+
+    - name: Update /etc/keystone/keystone.conf
+      ini_file: dest=/etc/keystone/keystone.conf
+                section=DEFAULT
+                option=admin_token
+                value=ca84dcf83035541024d6
+                backup=yes
+      tags: c
+
+    - name: Update keystone.conf
+      ini_file: dest=/etc/keystone/keystone.conf
+                section=database
+                option=connection 
+                value=mysql://keystone:keystone@controller/keystone
+                backup=yes
+      tags: d
+
+    - name: Update keystone.conf
+      ini_file: dest=/etc/keystone/keystone.conf
+                section=token
+                option=provider
+                value=fernet
+                backup=yes
+      tags: e
+
+    - name: synk keystone database
+      shell: su -s /bin/sh -c "keystone-manage db_sync" keystone
+      tags: f
+
+    - name: initilize fernet key
+      shell: keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+      tag: g
+
+    - name: configure the ServerName in apache2.conf
+      lineinfile:
+        dest: /etc/apache2/apache2.conf
+        line: 'ServerName controller'
+      tags: h 
+
+    - name: create wsgi-keystone.conf
+      copy: src=wsgi-keystone.conf dest=/etc/apache2/sites-available/wsgi-keystone.conf
+      tags: i
+
+    - name: Enable the Identity service virtual hosts
+      shell: ln -s /etc/apache2/sites-available/wsgi-keystone.conf /etc/apache2/sites-enabled
+      tags: j
+
+    - name: restart apache2
+      service: name=apache2 state=restarted
+      tags: k
+
+    - name: remove keystone.db
+      shell: rm -f /var/lib/keystone/keystone.db
+      tags: l
+
+    - name: replace admin token
+      shell: export OS_TOKEN=ca84dcf83035541024d6
+      tags: m
+
+    - name: endpoint url
+      shell: export OS_URL=http://controller:35357/v3
+      tags: n
+
+    - name: identity api
+      shell: export OS_IDENTITY_API_VERSION=3
+      tags: o 
+
+    - name: Create the service entity for the Identity service
+      command: openstack service create --name keystone --description "OpenStack Identity" identity
+      tags: p
