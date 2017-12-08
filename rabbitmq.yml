@@ -1,5 +1,5 @@
 ---
-- hosts: slave1
+- hosts: controller 
   tasks:
     - name: rabbirmq instalation
       apt: name=rabbitmq-server state=present
